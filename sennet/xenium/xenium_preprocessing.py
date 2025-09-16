@@ -203,7 +203,6 @@ def run_sigle_data(para_path, ome_tiff_path,cell_boundary_path,cell_path,cell_ty
         experiment_data = json.load(file)
     pixel_size = experiment_data.get("pixel_size")
 
-
     cell_types = pd.read_csv(cell_types_file_path)
     # Load the cell boundary data
     cell_boundaries = pd.read_csv(cell_boundary_path)
@@ -230,7 +229,7 @@ def run_sigle_data(para_path, ome_tiff_path,cell_boundary_path,cell_path,cell_ty
     crop_and_save_images(image_data, cell_boundaries, cell_centers, output_dir)
 
 
-root_path = "/media/huifang/data/Xenium/sennet_data/"
+root_path = "/media/huifang/data1/sennet/xenium/"
 if __name__ == "__main__":
     dataset = open(root_path+'data_list.txt')
     lines = dataset.readlines()

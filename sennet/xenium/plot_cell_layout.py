@@ -30,7 +30,7 @@ def plot_clustering_layout():
         )
 
         # Plot
-        fig, ax = plt.subplots(figsize=figsize)
+        fig, ax = plt.subplots()
         scatter = ax.scatter(
             merged['x_centroid'],
             merged['y_centroid'],
