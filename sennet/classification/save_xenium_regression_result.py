@@ -91,7 +91,8 @@ def evaluate_model_on_dslist(model, list_file, sample_dir, device):
     with torch.no_grad():
         for imgs, ds_scores, cellids in tqdm(loader, desc="Evaluating", total=len(loader)):
             imgs = imgs.to(device, non_blocking=True)
-            outputs = torch.sigmoid(model(imgs))
+            outputs = model(imgs)
+
             all_preds.extend(outputs.squeeze().tolist())
             all_cellids.extend(cellids)
             all_ds_scores.extend(ds_scores.tolist())
@@ -114,13 +115,13 @@ def run_single_sample(sample_id):
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 model_root = "/media/huifang/data/sennet/codex/cell_images/models/resnet"
-model_names=['top_bottom_10_ratio2','top_bottom_10_ratio3']
+model_names=['regressor_models']
 model = models.resnet18(weights=None)
 model.fc = nn.Linear(model.fc.in_features, 1)
 # Load trained model
 for model_name in model_names:
 
-    state_dict = torch.load(os.path.join(model_root, model_name, "cell_classifier_100.pth"), map_location=device, weights_only=True)
+    state_dict = torch.load(os.path.join(model_root, model_name, "cell_regressor_100.pth"), map_location=device, weights_only=True)
     model.load_state_dict(state_dict)
     model = model.to(device)
 

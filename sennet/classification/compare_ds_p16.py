@@ -14,6 +14,10 @@ def get_top_coords(signal, coords, percentile):
     threshold = np.percentile(signal, 100 - percentile)
     mask = signal >= threshold
     return coords[mask], signal[mask]
+def get_bottom_coords(signal, coords, percentile):
+    threshold = np.percentile(signal, percentile)
+    mask = signal <= threshold
+    return coords[mask], signal[mask]
 
 def visualize_marker_overlay():
     # Normalize gene expression to [0, 1]
@@ -52,6 +56,9 @@ def visualize_marker_overlay():
     p16_percentile= 10
     top_coords1, top_signal1 = get_top_coords(norm_xenium, warped_xenium_coor, ds_percentile)
     top_coords2, top_signal2 = get_top_coords(norm_codex, warped_codex_coor, p16_percentile)
+    # top_coords1, top_signal1 = get_bottom_coords(norm_xenium, warped_xenium_coor, ds_percentile)
+    # top_coords2, top_signal2 = get_bottom_coords(norm_codex, warped_codex_coor, p16_percentile)
+
 
     # Xenium: Top-k percentile
     axes[1, 0].scatter(warped_xenium_coor[:, 0], warped_xenium_coor[:, 1],

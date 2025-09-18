@@ -12,7 +12,7 @@ from matplotlib import cm, colors
 
 def get_top_coords(signal, coords,threshold):
     mask = signal >= threshold
-    return coords[mask], signal[mask]
+    return coords[mask], signal[mask],mask
 
 def get_bottom_coords_percentile(signal, coords, percentile):
     threshold = np.percentile(signal, percentile)
@@ -38,18 +38,24 @@ def binarize_with_extremes(arr, th):
     min_val, max_val = arr.min(), arr.max()
     out = np.where(arr > th, max_val, 0.4)
     return out
+
+def binarize_on_median(arr):
+    arr = np.asarray(arr)
+    min_val, max_val = arr.min(), arr.max()
+    median_val = np.median(arr)  # 50th percentile
+
+    out = np.where(arr > median_val, max_val, min_val)
+    return out
+
 def visualize_marker_overlay():
     # Normalize gene expression to [0, 1]
     norm_xenium = (xenium_gene_expr - xenium_gene_expr.min()) / (xenium_gene_expr.max() - xenium_gene_expr.min())
     norm_codex = (codex_gene_expr - codex_gene_expr.min()) / (codex_gene_expr.max() - codex_gene_expr.min())
-    # norm_pred = (codex2xenium_prediction - codex2xenium_prediction.min())/(codex2xenium_prediction.max() - codex2xenium_prediction.min())
-    norm_pred = codex2xenium_prediction
+    norm_pred = (codex2xenium_prediction - codex2xenium_prediction.min())/(codex2xenium_prediction.max() - codex2xenium_prediction.min())
 
 
-
-    # plot_two_datasets(norm_xenium,warped_xenium_coor,norm_codex,warped_codex_coor)
-
-    f, axes = plt.subplots(2, 3, figsize=(24, 12))
+    f, axes = plt.subplots(2, 3, figsize=(16, 8), sharex=True, sharey=True)
+    f.suptitle(f"Codex-{codex_sampleid}-{codex_regionid} : Xenium-{xenium_sampleid}-{xenium_regionid}", fontsize=20)
 
     # Use the same normalization for both "all" and "top" plots
     vmin_x, vmax_x = norm_xenium.min(), norm_xenium.max()
@@ -59,11 +65,9 @@ def visualize_marker_overlay():
     # cmap_blue = cm.get_cmap('Blues')
     # colors_codex = cmap_blue(norm_codex)
     # colors_codex[:, -1] = norm_codex
-
-
     cmap_blue = cm.get_cmap('Blues')
     cmap_blue_shifted = colors.LinearSegmentedColormap.from_list(
-        "Blues_shifted", cmap_blue(np.linspace(0.5, 1, 256))
+        "Blues_shifted", cmap_blue(np.linspace(0.3, 1, 256))
     )
     colors_codex = cmap_blue_shifted(norm_codex)
     min_alpha = 0.2
@@ -92,7 +96,7 @@ def visualize_marker_overlay():
 
     axes[0, 2].scatter(warped_xenium_coor[:, 0], warped_xenium_coor[:, 1],
                        color=colors_c2x, s=10, label='Codex2Xenium Pred')
-    axes[0, 2].set_title("Codex2Xenium prediction", fontsize=22)
+    axes[0, 2].set_title("Predicted P16 on Xenium", fontsize=22)
 
 
 
@@ -104,14 +108,14 @@ def visualize_marker_overlay():
     p16_percentile = 10
     top_coords1, top_signal1,top_mask = get_top_bottom_coords(norm_xenium, warped_xenium_coor, ds_percentile)
     top_coords2, top_signal2,_ = get_top_bottom_coords(norm_codex, warped_codex_coor, p16_percentile)
-    top_coords3, top_signal3 = warped_xenium_coor[top_mask],norm_pred[top_mask]
+    top_coords3, top_signal3,_ = get_top_bottom_coords(norm_pred, warped_xenium_coor, p16_percentile)
     #
     # plt.hist(top_signal3, bins=100, color="steelblue", edgecolor="black")
     # plt.xlabel("Value")
     # plt.ylabel("Frequency")
     # plt.title("Distribution of array values")
     # plt.show()
-    top_signal3 = binarize_with_extremes(top_signal3,0.993)
+    # top_signal3 = binarize_on_median(top_signal3)
 
 
     # CODEX: Top-k percentile
@@ -122,7 +126,7 @@ def visualize_marker_overlay():
                        vmin=vmin_c, vmax=vmax_c,  # shared color scale
                        label="Global positive senescence cells")
     # axes[1, 0].set_title("CODEX: Global positive senescence cells", fontsize=22)
-    axes[1, 0].set_title(f"CODEX: Top {p16_percentile}% p16 score", fontsize=22)
+    axes[1, 0].set_title(f"CODEX: Top & Bottom {p16_percentile}% p16 score", fontsize=22)
 
     # Xenium: Top-k percentile
     axes[1, 1].scatter(warped_xenium_coor[:, 0], warped_xenium_coor[:, 1],
@@ -132,7 +136,7 @@ def visualize_marker_overlay():
                              vmin=vmin_x, vmax=vmax_x,  # shared color scale
                              label="Global positive senescence cells")
     # axes[1, 1].set_title("Xenium: Global positive senescence cells", fontsize=22)
-    axes[1, 1].set_title(f"Xenium: Top {ds_percentile}% ds score", fontsize=22)
+    axes[1, 1].set_title(f"Xenium: Top & Bottom {ds_percentile}% ds score", fontsize=22)
 
     # Codex2Xenium
     axes[1, 2].scatter(warped_xenium_coor[:, 0], warped_xenium_coor[:, 1],
@@ -141,7 +145,7 @@ def visualize_marker_overlay():
                        c=top_signal3, cmap="Greens", s=10,
                        vmin=vmin_p, vmax=vmax_p,  # shared color scale
                        label="Global positive senescence cells")
-    axes[1, 2].set_title("Codex 2 Xenium: predicted positive senescence cells", fontsize=22)
+    axes[1, 2].set_title(f"C2X: Top & Bottom {p16_percentile}% predicted p16 score", fontsize=22)
 
 
 
@@ -187,7 +191,7 @@ r_values = []
 p_values = []
 
 
-result_file = "/media/huifang/data/sennet/codex/cell_images/results/top_bottom_10_ratio2_predictions.csv"
+result_file = "/media/huifang/data/sennet/codex/cell_images/results/regressor_models_predictions.csv"
 result = pd.read_csv(result_file)
 result = result.rename(columns={
     "sample_id": "sampleid",

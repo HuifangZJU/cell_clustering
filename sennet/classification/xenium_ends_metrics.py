@@ -16,39 +16,53 @@ from sklearn.metrics import (
 from scipy.stats import pearsonr, spearmanr
 
 def analyze_and_plot(csv_file, k_percent=5, threshold=0.9):
-    # Load CSV
+    # read data
     df = pd.read_csv(csv_file, sep=None, engine="python")
-
     ds = df["ds"].values
     pred = df["pred"].values
-    ds = (ds - ds.min()) /(ds.max() - ds.min())
     pred = (pred - pred.min()) / (pred.max() - pred.min())
 
-    # ----- Binary labels for ROC/PR -----
+
+    # ----- Top & bottom k% selection -----
     n = len(ds)
     k = int(np.ceil(n * k_percent / 100))
-    cutoff = np.sort(ds)[-k]
-    y_true = (ds >= cutoff).astype(int)
+
+    # cutoffs
+    top_cutoff = np.sort(ds)[-k]
+    bottom_cutoff = np.sort(ds)[k - 1]
+
+    # masks
+    mask_top = ds >= top_cutoff
+    mask_bottom = ds <= bottom_cutoff
+    mask = mask_top | mask_bottom
+
+    # keep only top & bottom
+    ds_sel = ds[mask]
+    pred_sel = pred[mask]
+
+    # labels: 1 for top, 0 for bottom
+    y_true = np.zeros_like(ds_sel, dtype=int)
+    y_true[mask_top[mask]] = 1  # within the masked subset, assign top as 1
 
     # ----- ROC -----
-    fpr, tpr, _ = roc_curve(y_true, pred)
-    auc = roc_auc_score(y_true, pred)
+    fpr, tpr, _ = roc_curve(y_true, pred_sel)
+    auc = roc_auc_score(y_true, pred_sel)
 
     # ----- Precision-Recall -----
-    prec, rec, _ = precision_recall_curve(y_true, pred)
-    ap = average_precision_score(y_true, pred)
+    prec, rec, _ = precision_recall_curve(y_true, pred_sel)
+    ap = average_precision_score(y_true, pred_sel)
 
     # ----- Normalize scales -----
     scaler = MinMaxScaler()
-    ds_norm = scaler.fit_transform(ds.reshape(-1, 1)).flatten()
-    pred_norm = scaler.fit_transform(pred.reshape(-1, 1)).flatten()
+    ds_norm = scaler.fit_transform(ds_sel.reshape(-1, 1)).flatten()
+    pred_norm = scaler.fit_transform(pred_sel.reshape(-1, 1)).flatten()
 
     # ----- Correlation (normalized) -----
     pearson_corr, _ = pearsonr(ds_norm, pred_norm)
     spearman_corr, _ = spearmanr(ds_norm, pred_norm)
 
     # ----- Confusion matrix -----
-    y_pred = (pred >= threshold).astype(int)
+    y_pred = (pred_sel >= threshold).astype(int)
     cm = confusion_matrix(y_true, y_pred, labels=[1, 0])
     cm_norm = cm.astype("float") / cm.sum(axis=1)[:, np.newaxis]
 
@@ -57,57 +71,42 @@ def analyze_and_plot(csv_file, k_percent=5, threshold=0.9):
     rec_bin = recall_score(y_true, y_pred)
 
     # ----- Plot -----
-    fig, axs = plt.subplots(2, 2, figsize=(12, 10))
+    fig, axs = plt.subplots(1, 3, figsize=(18, 5))
 
     # ROC
-    axs[0,0].plot(fpr, tpr, label=f"AUC={auc:.3f}")
-    axs[0,0].plot([0, 1], [0, 1], "k--")
-    axs[0,0].set_title(f"ROC (top {k_percent}% ds as positive)")
-    axs[0,0].set_xlabel("False Positive Rate")
-    axs[0,0].set_ylabel("True Positive Rate")
-    axs[0,0].legend()
+    axs[0].plot(fpr, tpr, label=f"AUC={auc:.3f}")
+    axs[0].plot([0, 1], [0, 1], "k--")
+    axs[0].set_title(f"ROC (top/bottom {k_percent}% ds as positive/negative)")
+    axs[0].set_xlabel("False Positive Rate")
+    axs[0].set_ylabel("True Positive Rate")
+    axs[0].legend()
 
     # PR
-    axs[0,1].plot(rec, prec, label=f"AP={ap:.3f}")
-    axs[0,1].set_title("Precision–Recall Curve")
-    axs[0,1].set_xlabel("Recall")
-    axs[0,1].set_ylabel("Precision")
-    axs[0,1].legend()
-
-    # Scatter + correlation
-    axs[1, 0].scatter(ds_norm, pred_norm, s=0.1, alpha=0.5)
-    axs[1, 0].set_title(f"Normalized DS vs Prediction\nPearson={pearson_corr:.3f}, Spearman={spearman_corr:.3f}")
-    axs[1, 0].set_xlabel("DS score (normalized)")
-    axs[1, 0].set_ylabel("Model prediction (normalized)")
-
-    # Diagonal red dashed line
-    lims = [
-        min(axs[1, 0].get_xlim()[0], axs[1, 0].get_ylim()[0]),
-        max(axs[1, 0].get_xlim()[1], axs[1, 0].get_ylim()[1])
-    ]
-    axs[1, 0].plot(lims, lims, 'r--', linewidth=1)
-    axs[1, 0].set_xlim(lims)
-    axs[1, 0].set_ylim(lims)
+    axs[1].plot(rec, prec, label=f"AP={ap:.3f}")
+    axs[1].set_title("Precision–Recall Curve")
+    axs[1].set_xlabel("Recall")
+    axs[1].set_ylabel("Precision")
+    axs[1].legend()
 
     # Normalized Confusion matrix with counts
-    axs[1,1].imshow(cm_norm, interpolation="nearest", cmap="Blues")
-    axs[1,1].set_title(
+    axs[2].imshow(cm_norm, interpolation="nearest", cmap="Blues")
+    axs[2].set_title(
         f"Confusion Matrix (thr={threshold})\nF1={f1:.3f}, P={prec_bin:.3f}, R={rec_bin:.3f}"
     )
     classes = ["SNC","Non-snc"]
-    axs[1,1].set_xticks(np.arange(len(classes)))
-    axs[1,1].set_yticks(np.arange(len(classes)))
-    axs[1,1].set_xticklabels(classes)
-    axs[1,1].set_yticklabels(classes)
-    axs[1,1].set_ylabel("True label")
-    axs[1,1].set_xlabel("Predicted label")
+    axs[2].set_xticks(np.arange(len(classes)))
+    axs[2].set_yticks(np.arange(len(classes)))
+    axs[2].set_xticklabels(classes)
+    axs[2].set_yticklabels(classes)
+    axs[2].set_ylabel("True label")
+    axs[2].set_xlabel("Predicted label")
 
     # Annotate each cell
     fmt = ".2f"
     thresh = cm_norm.max() / 2.
     for i in range(cm.shape[0]):
         for j in range(cm.shape[1]):
-            axs[1,1].text(
+            axs[2].text(
                 j, i,
                 f"{cm_norm[i, j]:.2f}\n({cm[i, j]})",
                 ha="center", va="center",
@@ -129,7 +128,8 @@ def analyze_and_plot(csv_file, k_percent=5, threshold=0.9):
         "ConfusionMatrixNormalized": cm_norm
     }
 
-auc = analyze_and_plot("/media/huifang/data/sennet/codex/cell_images/results/top_bottom_10_ratio2_predictions.csv", k_percent=10,threshold=0.5)
+# auc = analyze_and_plot("/media/huifang/data/sennet/codex/cell_images/results/top_bottom_10_ratio2_predictions.csv", k_percent=10,threshold=0.99)
+auc = analyze_and_plot("/media/huifang/data/sennet/codex/cell_images/results/regressor_models_predictions.csv", k_percent=10,threshold=0.5)
 # auc = analyze_and_plot("/media/huifang/data/sennet/codex/cell_images/results/top1-models-equal-neg_predictions.csv", k_percent=1,threshold=0.9)
 # auc = analyze_and_plot("/media/huifang/data/sennet/codex/cell_images/results/top1-models-double-neg_predictions.csv", k_percent=10,threshold=0.9)
 # auc = analyze_and_plot("/media/huifang/data/sennet/codex/cell_images/results/top1-models-triple-neg_predictions.csv", k_percent=1,threshold=0.9)
